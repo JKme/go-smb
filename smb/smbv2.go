@@ -1,9 +1,5 @@
 package smb
 
-import (
-	"go-smb/gss"
-)
-
 type HeaderV2 struct {
 	ProtocolID    []byte `smb:"fixed:4"`
 	StructureSize uint16
@@ -20,13 +16,15 @@ type HeaderV2 struct {
 	Signature     []byte `smb:"fixed:16"`
 }
 
-type SessionSetup2Res struct {
-	HeaderV2
+type SessionSetup2ResV2 struct {
+	Header               []byte
 	StructureSize        uint16
 	Flags                uint16
 	SecurityBufferOffset uint16 `smb:"offset:SecurityBlob"`
 	SecurityBufferLength uint16 `smb:"len:SecurityBlob"`
-	SecurityBlob         *gss.NegTokenResp
+	SecurityBlob         []byte
+
+	//SecurityBlob         *gss.NegTokenResp
 }
 
 func bytes2Uint(bs []byte, endian byte) uint64 {
@@ -43,43 +41,47 @@ func bytes2Uint(bs []byte, endian byte) uint64 {
 	return u
 }
 
-const ProtocolSmb2 = "\xFESMB"
+//const ProtocolSmb2 = "\xFESMB"
 
 //https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/fb188936-5050-48d3-b350-dc43059638a4
 //https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs/69a29f73-de0c-45a6-a1aa-8ceeea42217f
-func newHeader() HeaderV2 {
-	return HeaderV2{
-		ProtocolID:    []byte(ProtocolSmb2),
-		StructureSize: 64,
-		CreditCharge:  0,
-		Status:        0,
-		Command:       0,
-		Credits:       0,
-		Flags:         0,
-		NextCommand:   0,
-		MessageID:     0,
-		Reserved:      0,
-		TreeID:        0,
-		SessionID:     0,
-		Signature:     make([]byte, 16),
-	}
-}
+//func newHeader() HeaderV2 {
+//	return HeaderV2{
+//		ProtocolID:    []byte(ProtocolSmb2),
+//		StructureSize: 64,
+//		CreditCharge:  0,
+//		Status:        0,
+//		Command:       0,
+//		Credits:       0,
+//		Flags:         0,
+//		NextCommand:   0,
+//		MessageID:     0,
+//		Reserved:      0,
+//		TreeID:        0,
+//		SessionID:     0,
+//		Signature:     make([]byte, 16),
+//	}
+//}
 
-func NewSessionSetup2Res(bs []byte) *SessionSetup2Res {
-	tokenBlob, _ := gss.NewNegTokenResp()
-	resp := SessionSetup2Res{}
+func NewSessionSetup2ResV2(bs []byte) SessionSetup2ResV2 {
+	//tokenBlob, _ := gss.NewNegTokenResp()
+	resp := SessionSetup2ResV2{}
 	if bs == nil {
-		resp = SessionSetup2Res{
-			HeaderV2:     newHeader(),
-			SecurityBlob: &tokenBlob,
+		resp = SessionSetup2ResV2{
+			Header:       make([]byte, 64),
+			SecurityBlob: []byte{},
 		}
 	} else {
-		resp.UnMarshal(bs)
+		resp.UnMarshalV2(bs)
 	}
-	return &resp
+	return resp
 }
 
-func (resp *SessionSetup2Res) UnMarshal(bs []byte) {
-	copy(resp.ProtocolID, bs[:8])
-	//resp.StructureSize = uint32(bytes2Uint(bs[8:12], '<'))
+func (resp *SessionSetup2ResV2) UnMarshalV2(bs []byte) {
+	copy(resp.Header, bs[:64])
+	resp.StructureSize = uint16(bytes2Uint(bs[64:66], '<'))
+	resp.Flags = uint16(bytes2Uint(bs[66:68], '<'))
+	resp.SecurityBufferOffset = uint16(bytes2Uint(bs[68:70], '<'))
+	resp.SecurityBufferLength = uint16(bytes2Uint(bs[70:72], '<'))
+	resp.SecurityBlob = bs[int(resp.SecurityBufferOffset) : int(resp.SecurityBufferOffset)+int(resp.SecurityBufferLength)]
 }
